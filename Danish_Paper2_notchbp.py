@@ -313,15 +313,15 @@ def CDcorrelation(t1, t2, window_duration):
 		    C_tau[j+tau_max_index]=stats.pearsonr(strain_H1_filt[i+j:i+window_index_len+j], strain_L1_filt[i:i+window_index_len])[0]
 		D_t1_t2+=C_tau
 	E=stats.pearsonr(C_gw, D_t1_t2)[0]
-	print 'CC Bw C & D in (-10 ms, 10 ms) E @(', t1, ', ', t2, ') =', E
+	print 'CC Bw C & D in (-10 ms, 10 ms) E @ (', t1, ', ', t2, ') =', E
 	indxt=np.where((tau_range>=5e-3)&(tau_range<=9e-3))	#Truncated range of (5 ms, 9 ms)
 	Et=stats.pearsonr(C_gw[indxt], D_t1_t2[indxt])[0]
-	print 'CC Bw C & D in (-5 ms, 9 ms) E @(', t1, ', ', t2, ') =', Et
+	print 'CC Bw C & D in (-5 ms, 9 ms) E @ (', t1, ', ', t2, ') =', Et
 
 print 'Batches of size 0.2 s:'
-#C_D_n_cmax_batchwise(0.2)
+C_D_n_cmax_batchwise(0.2)
 print 'Batches of size 0.1 s:'
-#C_D_n_cmax_batchwise(0.1)
+C_D_n_cmax_batchwise(0.1)
 CDcorrelation(1280, 4050, 0.1)
 CDcorrelation(1280, 2048, 0.1)
 CDcorrelation(2048, 4050, 0.1)
