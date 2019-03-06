@@ -1,3 +1,5 @@
+#This code calculated the average cross correlation (D) in some regions before, around and after the GW event
+#It also calculates the cross correlatin between this D and for a small window around the event (C_gw) as E
 import numpy as np
 from scipy import signal, stats
 from scipy.interpolate import interp1d
@@ -151,6 +153,11 @@ filt_resp = filt_resp**2
 strain_H1_filt = filter_data(strain_H1, coefs)
 strain_L1_filt = filter_data(strain_L1, coefs)
 
+def scale_0mean_1rms(x):
+	x-=np.mean(x)	#mean 0
+	x/=np.std(x)	#rms 1
+	return x
+
 # Calculating the cross correlation in a 0.1 s batch around the GW event
 semi_window_duration=0.05
 index_gw_window_start=int((tevent-time[0]-semi_window_duration)/dt)
@@ -160,6 +167,8 @@ window_index_len=np.size(strain_L1_gw)
 tau_max=0.01    #10 ms
 tau_max_index=int(np.around(tau_max/dt))
 tau_range=np.linspace(-tau_max_index*dt, tau_max_index*dt, 2*tau_max_index+1)
+indxtp=np.where((tau_range>=5e-3)&(tau_range<=9e-3))	#Truncated
+indxtn=np.where((tau_range>=-10e-3)&(tau_range<=-6e-3))	#Truncated range of (5 ms, 9 ms)
 C_gw=np.empty(2*tau_max_index+1)
 for i in np.arange(-tau_max_index, tau_max_index+1):
     C_gw[i+tau_max_index]=stats.pearsonr(strain_H1_filt[index_gw_window_start+i:index_gw_window_end+i], strain_L1_gw)[0]
@@ -174,21 +183,20 @@ plt.xlabel(r'$\tau\ (ms)$',fontsize=22,labelpad=0)
 plt.ylabel(r'$C_{gw}(\tau)$',fontsize=22,labelpad=0)
 plt.axvline(x=7.33,linestyle='--')
 plt.savefig('C_near_gw.png')
-C_gw-=np.mean(C_gw)
-C_gw/=np.std(C_gw)	# Making Cgw have mean 0, rms value 1
+C_gw_scaled=scale_0mean_1rms(C_gw)	# Making Cgw have mean 0, rms value 1
 
 #Caluclating the cross correlation in the regions before and after the GW event, mean batchwise cross correlations, instants with maximum cross correlation in the batchs
 #We ignore the data at the edges of the regions
-def Cgw_D_n_Cmax_batchwise(window_duration):
+def Cgw_D_n_Cmax_before_n_after(t_start, t_end, window_duration):
 	window_index_len=int(window_duration/dt)
 	if window_index_len%2==1:    #Helps for computing the middlemost instant in the batch with ease
 		window_index_len+=1
 
 	index_before_start=int(30/dt)+1	# 30 s after the start of the time series
-	index_before_end=int((tevent-time[0]-30)/dt)	# 60 s before the end of the GW event
+	index_before_end=int((tevent-time[0]-60)/dt)	# 60 s before the end of the GW event
 	batches_index_before=np.arange(tau_max_index+index_before_start, index_before_end-tau_max_index-window_index_len, window_index_len)    #Indices of time before the event
 
-	index_after_start=int((tevent-time[0]+30)/dt)+1	# 60 s after the end of the GW event
+	index_after_start=int((tevent-time[0]+60)/dt)+1	# 60 s after the end of the GW event
 	index_after_end=np.size(time)-1-int(30/dt)	# 30 s before the end of the time series
 	batches_index_after=np.arange(index_after_start, index_after_end-window_index_len-tau_max_index, window_index_len)	#Indices of time after the event
 
@@ -204,7 +212,6 @@ def Cgw_D_n_Cmax_batchwise(window_duration):
 
 	#Calculating D just by using a average
 	k=0
-	batches_index_before_end=batches_index_before[-1]
 	for i in batches_index_before:
 		for j in np.arange(-tau_max_index, tau_max_index+1):
 		    C_tau[j+tau_max_index]=stats.pearsonr(strain_H1_filt[i+j:i+window_index_len+j], strain_L1_filt[i:i+window_index_len])[0]
@@ -244,14 +251,11 @@ def Cgw_D_n_Cmax_batchwise(window_duration):
 	#    C_max[k]=C_tau_after[C_max_index]
 	#    C_max_tau[k]=(C_max_index-tau_max_index)*dt
 		k+=1'''
-
-	D_before-=np.mean(D_before)
-	D_before/=np.std(D_before)
-	D_after-=np.mean(D_after)
-	D_after/=np.std(D_after)   #Making D with mean 0, RMS value 1
+	D_before=scale_0mean_1rms(D_before)
+	D_after=scale_0mean_1rms(D_after)	#Making D with mean 0, RMS value 1
 
 	plt.figure()
-	plt.plot(1000*tau_range, C_gw, 'b')
+	plt.plot(1000*tau_range, C_gw_scaled, 'b')
 	plt.plot(1000*tau_range, D_before, 'r')
 	plt.xlabel(r'$\tau\ (ms)$')
 	plt.ylim([-3, 2.5])
@@ -259,13 +263,12 @@ def Cgw_D_n_Cmax_batchwise(window_duration):
 	plt.savefig('Dbefore_notchbp_w_point'+str(int(10*window_duration))+'.png')
 
 	plt.figure()
-	plt.plot(1000*tau_range, C_gw, 'b')
+	plt.plot(1000*tau_range, C_gw_scaled, 'b')
 	plt.plot(1000*tau_range, D_after, 'r')
 	plt.xlabel(r'$\tau\ (ms)$')
 	plt.legend([r'$C_{gw}(\tau)$', r'$D_{after\ gw}(\tau)$'], loc='upper left')
 	plt.ylim([-3, 2.5])
 	plt.savefig('Dafter_notchbp_w_point'+str(int(10*window_duration))+'.png')
-	return
 	batch_time=time[batches_index+window_index_len/2]    #Mid instances in every batch
 
 	C_max_overall_index=np.argmax(np.abs(C_max))
@@ -285,30 +288,58 @@ def Cgw_D_n_Cmax_batchwise(window_duration):
 	plt.title(r'$Max.\ CC\ for\ different\ mid\ instants\ of\ the\ '+str(window_duration)+'\ s\ batches$')
 	plt.savefig('Cmax_vs_batchtime_notchbp_w_point'+str(int(10*window_duration))+'.png')
 
-def CDcorrelation(t1, t2, window_duration):
+def CDcorrelation(t, window_duration):
 	#Calculating the cross correlation between CC and D
+	#t: contains intervals
 	window_index_len=int(window_duration/dt)
-	t1_index=int(t1/dt)+1
-	t2_index=int(t2/dt)
 	D_t1_t2=np.zeros(2*tau_max_index+1)
-	batches_index_t1_t2=np.arange(tau_max_index+t1_index, t2_index-tau_max_index-window_index_len, window_index_len)
+	batches_index_t1_t2=np.empty(0, int)
+	for i in np.arange(np.size(t)/2):
+		t1_index=int(t[2*i]/dt)+1
+		t2_index=int(t[2*i+1]/dt)
+		batches_index_t1_t2=np.append(batches_index_t1_t2, np.arange(tau_max_index+t1_index, t2_index-tau_max_index-window_index_len, window_index_len))
 	C_tau=np.empty(2*tau_max_index+1)	#Cross correlations at every tau
 	for i in batches_index_t1_t2:
 		for j in np.arange(-tau_max_index, tau_max_index+1):
 		    C_tau[j+tau_max_index]=stats.pearsonr(strain_H1_filt[i+j:i+window_index_len+j], strain_L1_filt[i:i+window_index_len])[0]
 		D_t1_t2+=C_tau
+	D_t1_t2/=np.size(batches_index_t1_t2)
 	E=stats.pearsonr(C_gw, D_t1_t2)[0]
-	print 'CC between Cgw & D in (-10 ms, 10 ms) E @(', t1, ', ', t2, ') =', E
-	indxt=np.where((tau_range>=5e-3)&(tau_range<=9e-3))	#Truncated range of (5 ms, 9 ms)
-	Et=stats.pearsonr(C_gw[indxt], D_t1_t2[indxt])[0]
-	print 'CC between Cgw & D in (-5 ms, 9 ms) E @(', t1, ', ', t2, ') =', Et
+	Etp=stats.pearsonr(C_gw[indxtp], D_t1_t2[indxtp])[0]
+	Etn=stats.pearsonr(C_gw[indxtn], D_t1_t2[indxtn])[0]
+	plt.figure()
+	plt.plot(1000*tau_range, C_gw_scaled, 'b')
+	plt.plot(1000*tau_range, scale_0mean_1rms(D_t1_t2), 'r')
+	plt.xlabel(r'$\tau\ (ms)$')
+	figname='D'
+	for i in np.arange(np.size(t)):
+		if i%2==0:
+			figname+='('+str(t[i])
+		else:
+			figname+=', '+str(t[i])+')'
+			if i>=2:
+				figname+='U'
+	plt.savefig(figname+'.png')
+	plt.legend([r'$C_{gw}$', figname], loc='upper left')
+	return [E, Etp, Etn]
 
 print 'Batches of size 0.2 s:'
-Cgw_D_n_Cmax_batchwise(0.2)
+Cgw_D_n_Cmax_before_n_after(0.2)
 print 'Batches of size 0.1 s:'
-Cgw_D_n_Cmax_batchwise(0.1)
-exit()
-CDcorrelation(1280, 4050, 0.1)
-CDcorrelation(1280, 2048, 0.1)
-CDcorrelation(2048, 4050, 0.1)
+Cgw_D_n_Cmax_before_n_after(0.1)
+e=CDcorrelation([1280, 1988], 0.1)
+print 'In the interval (1280, 1988) s, the cross correlation between Cgw and D is:'
+print '(-10 ms, 10 ms):', e[0]
+print '(5 ms, 9 ms):', e[1]
+print '(-10 ms, -6 ms):', e[2]
+e=CDcorrelation([2108, 4050], 0.1)
+print 'In the interval (2108, 4050) s, the cross correlation between Cgw and D is:'
+print '(-10 ms, 10 ms):', e[0]
+print '(5 ms, 9 ms):', e[1]
+print '(-10 ms, -6 ms):', e[2]
+e=CDcorrelation([1280, 1988, 2108, 4050], 0.1)
+print 'In the interval (1280, 1988)U(2108, 4050) s, the cross correlation between Cgw and D is:'
+print '(-10 ms, 10 ms):', e[0]
+print '(5 ms, 9 ms):', e[1]
+print '(-10 ms, -6 ms):', e[2]
 
